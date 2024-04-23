@@ -3,9 +3,12 @@ import json
 import hashlib
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.uic import loadUi
-from PyQt5.QtCore import pyqtSlot, QTimer, QDateTime
-from PyQt5.QtWidgets import QDialog, QLabel, QComboBox, QApplication, QInputDialog, QPushButton, QVBoxLayout, QLineEdit, \
-    QFileDialog, QMessageBox
+from PyQt5.QtCore import pyqtSlot, QTimer, QDate
+from PyQt5.QtWidgets import (
+    QDialog, QVBoxLayout, QPushButton, QLineEdit, QComboBox,
+    QFormLayout, QDialogButtonBox, QMessageBox, QFileDialog,
+    QInputDialog, QApplication, QDateEdit, QLabel
+)
 from PyQt5.QtCore import QDate, QTime
 import cv2
 import numpy as np
@@ -13,13 +16,11 @@ import datetime
 import os
 import csv
 import face_recognition
-from datetime import datetime
 
 
 def hash_password(password):
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
     return hashed_password
-
 
 # 初始化管理员配置（如果需要的话）
 if not os.path.exists('admin_config.json'):
@@ -224,8 +225,8 @@ class Ui_OutputDialog(QDialog):
 
         # 设置日期和时间标签
         now = QDate.currentDate()
-        current_date = now.toString('yyyy MM dd ddd  ')
-        current_time = datetime.datetime.now().strftime("%I:%M %p")
+        current_date = now.toString('yyyy/MM/dd ddd  ')
+        current_time = datetime.datetime.now().strftime("%H:%M:%s")
         self.Date_Label.setText(current_date)
         self.Time_Label.setText(current_time)
 
@@ -416,7 +417,7 @@ class Ui_OutputDialog(QDialog):
         encodes_cur_frame = face_recognition.face_encodings(frame, faces_cur_frame)
 
         for encodeFace, faceLoc in zip(encodes_cur_frame, faces_cur_frame):
-            match = face_recognition.compare_faces(encode_list_known, encodeFace, tolerance=0.35)
+            match = face_recognition.compare_faces(encode_list_known, encodeFace, tolerance=0.2)
             face_dis = face_recognition.face_distance(encode_list_known, encodeFace)
             name = "unknown"
             min_distance = min(face_dis)
@@ -477,30 +478,31 @@ class Ui_OutputDialog(QDialog):
         current_time = datetime.datetime.now().strftime("%I:%M:%S %p")
         self.Time_Label.setText(current_time)
 
+
 class AttendanceManagementDialog(QDialog):
     def create_date_dropdowns(self):
-        # 创建年份下拉菜单
+        # 创建日期选择下拉菜单
         self.year_combo = QComboBox()
-        current_year = QDate.currentDate().year()
-        for year in range(current_year - 10, current_year + 1):
-            self.year_combo.addItem(str(year))
-
-        # 创建月份下拉菜单
         self.month_combo = QComboBox()
-        for month in range(1, 13):
-            self.month_combo.addItem(str(month).zfill(2))
-
-        # 创建日期下拉菜单
         self.day_combo = QComboBox()
-        for day in range(1, 32):
-            self.day_combo.addItem(str(day).zfill(2))
 
+        self.populate_year_combo()  # 填充年份
+        self.populate_month_combo()  # 填充月份
+        self.populate_day_combo()  # 填充日期
+
+        # 添加日期选择到布局
         layout = QVBoxLayout()
         layout.addWidget(self.year_combo)
         layout.addWidget(self.month_combo)
         layout.addWidget(self.day_combo)
 
         return layout
+
+    def get_selected_date(self):
+        year = self.year_combo.currentText()
+        month = self.month_combo.currentText()
+        day = self.day_combo.currentText()
+        return f"{year}/{month}/{day}"
 
     def __init__(self):
         super().__init__()
@@ -521,94 +523,161 @@ class AttendanceManagementDialog(QDialog):
 
         self.setLayout(layout)
 
+    def populate_year_combo(self):
+        years = [str(year) for year in range(2000, QDate.currentDate().year() + 1)]
+        self.year_combo.addItems(years)
+
+    def populate_month_combo(self):
+        months = [str(month).zfill(2) for month in range(1, 13)]
+        self.month_combo.addItems(months)
+
+    def populate_day_combo(self):
+        days = [str(day).zfill(2) for day in range(1, 32)]
+        self.day_combo.addItems(days)
+
+    import datetime
+
     def add_record(self):
-        # 创建对话框和布局
-        dialog = QDialog()
-        dialog.setWindowTitle('添加签到记录')
-        layout = QVBoxLayout()
+        # 创建一个新的对话框窗口
+        dialog = QDialog(self)
+        dialog.setWindowTitle("添加签到记录")
 
-        # 添加输入学生姓名的文本框
-        name_label = QLabel('学生姓名:')
-        name_input = QLineEdit()
-        layout.addWidget(name_label)
-        layout.addWidget(name_input)
+        # 使用QFormLayout布局，将标签和输入字段组合在一起
+        layout = QFormLayout()
 
-        # 添加输入学生学号的文本框
-        student_id_label = QLabel('学生学号:')
-        student_id_input = QLineEdit()
-        layout.addWidget(student_id_label)
-        layout.addWidget(student_id_input)
+        # 添加输入字段和标签
+        name_edit = QLineEdit()
+        layout.addRow("学生姓名:", name_edit)
 
-        # 创建日期下拉菜单
-        date_layout = self.create_date_dropdowns()
-        date_label = QLabel('选择日期:')
-        layout.addWidget(date_label)
-        layout.addLayout(date_layout)
+        student_id_edit = QLineEdit()
+        layout.addRow("学生学号:", student_id_edit)
 
-        # 添加确定按钮
-        add_button = QPushButton('添加')
-        add_button.clicked.connect(lambda: self.confirm_add(dialog, name_input.text(), student_id_input.text()))
-        layout.addWidget(add_button)
+        # 添加日期选择器
+        date_edit = QDateEdit()
+        date_edit.setCalendarPopup(True)
+        date_edit.setDate(QDate.currentDate())
+        layout.addRow("日期:", date_edit)
 
-        # 设置布局
+        # 添加确定和取消按钮
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addRow(buttons)
+
+        # 连接按钮的信号和槽函数
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+
+        # 设置对话框的主布局
         dialog.setLayout(layout)
 
-        # 显示对话框
-        dialog.exec_()
+        # 显示对话框并等待用户操作
+        if dialog.exec_() == QDialog.Accepted:
+            # 获取输入的信息
+            name = name_edit.text()
+            student_id = student_id_edit.text()
+            selected_date = date_edit.date().toString("yy/MM/dd")
 
-    def confirm_add(self, dialog, name, student_id):
-        selected_date = f"{self.year_combo.currentText()}-{self.month_combo.currentText().zfill(2)}-{self.day_combo.currentText().zfill(2)}"
-        # 将字符串转换为 datetime 对象
-        date_object = datetime.strptime(selected_date, "%Y-%m-%d")
+            # 检查输入是否完整
+            if not name:
+                QMessageBox.warning(self, "输入错误", "学生姓名不能为空！")
+                return
+            if not student_id:
+                QMessageBox.warning(self, "输入错误", "学生学号不能为空！")
+                return
+            if not selected_date:
+                QMessageBox.warning(self, "输入错误", "日期不能为空！")
+                return
 
-        # 将 datetime 对象格式化为所需格式
-        formatted_date = date_object.strftime("%y/%m/%d")
+            # 获取当前系统时间
+            current_time = datetime.datetime.now().strftime('%H:%M:%S')
 
-        if not self.year_combo.currentText() or not self.month_combo.currentText() or not self.day_combo.currentText():
-            QMessageBox.warning(dialog, "警告", "请选择完整的日期！")
-            return
+            # 将日期和时间组合成一个字符串，使用空格分隔
+            datetime_str = f"{selected_date} {current_time}"
 
-        if not name:
-            QMessageBox.warning(dialog, "警告", "学生姓名不能为空！")
-            return
+            # 将记录追加到CSV文件
+            with open('student_info.csv', 'a') as file:
+                writer = csv.writer(file)
+                writer.writerow([name, student_id, datetime_str, 'Sign In'])
 
-        if not student_id:
-            QMessageBox.warning(dialog, "警告", "学生学号不能为空！")
-            return
-
-        # Record current system time
-        current_time = datetime.datetime.now().strftime("%H:%M:%S")
-
-        # Append record to CSV
-        with open('/Users/sonata/Desktop/Face-Recogntion-PyQt/Face_Detection_PyQt_Final/student_info.csv', 'a') as file:
-            writer = csv.writer(file)
-            writer.writerow([name, student_id, formatted_date, current_time, 'Clock In'])
-
-        QMessageBox.information(dialog, "添加成功", "签到记录添加成功！")
-        dialog.accept()
+            # 显示添加成功的消息框
+            QMessageBox.information(self, "添加成功", "签到记录添加成功！")
 
     def delete_record(self):
-        name, ok = QInputDialog.getText(self, '删除签到记录', '请输入学生姓名:')
-        if not ok:
-            return
+        # 创建输入对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("删除签到记录")
+        layout = QVBoxLayout()
 
-        student_id, ok = QInputDialog.getText(self, '删除签到记录', '请输入学生学号:')
-        if not ok:
-            return
+        # 添加姓名输入字段
+        name_label = QLabel("学生姓名:")
+        name_edit = QLineEdit()
+        layout.addWidget(name_label)
+        layout.addWidget(name_edit)
 
-        selected_date = self.get_selected_date()
+        # 添加学号输入字段
+        student_id_label = QLabel("学生学号:")
+        student_id_edit = QLineEdit()
+        layout.addWidget(student_id_label)
+        layout.addWidget(student_id_edit)
 
-        # Delete record from CSV
-        with open('student_info.csv', 'r') as file:
-            lines = list(csv.reader(file))
+        # 添加日期选择器
+        date_edit = QDateEdit()
+        date_edit.setCalendarPopup(True)
+        date_edit.setDate(QDate.currentDate())
+        layout.addWidget(QLabel("选择日期:"))
+        layout.addWidget(date_edit)
 
-        with open('student_info.csv', 'w') as file:
-            writer = csv.writer(file)
-            for line in lines:
-                if line[0] != name or line[1] != student_id or line[2] != selected_date:
-                    writer.writerow(line)
+        # 添加确定和取消按钮
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
 
-        QMessageBox.information(self, "删除成功", "签到记录删除成功！")
+        # 连接按钮的信号和槽函数
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+
+        # 设置对话框的主布局
+        dialog.setLayout(layout)
+
+        # 显示对话框并等待用户操作
+        while True:
+            if not dialog.exec_():
+                return
+
+            # 获取用户输入的姓名、学号和日期
+            name = name_edit.text()
+            student_id = student_id_edit.text()
+            selected_date = date_edit.date().toString("yy/MM/dd")  # 获取选中的日期
+
+            # 检查输入是否完整
+            if not name:
+                QMessageBox.warning(self, "输入错误", "学生姓名不能为空！")
+                continue
+            if not student_id:
+                QMessageBox.warning(self, "输入错误", "学生学号不能为空！")
+                continue
+            if not selected_date:
+                QMessageBox.warning(self, "输入错误", "日期不能为空！")
+                continue
+
+            # 读取CSV文件中的记录到内存
+            with open('student_info.csv', 'r') as file:
+                lines = list(csv.reader(file))
+
+            # 在内存中进行删除操作
+            filtered_lines = [line for line in lines if
+                              line[0] != name or line[1] != student_id or line[2].split()[0] != selected_date]
+
+            # 检查是否有记录被删除
+            if len(filtered_lines) == len(lines):
+                QMessageBox.warning(self, "删除失败", "找不到匹配的记录！")
+                continue
+
+            # 将过滤后的记录写回CSV文件
+            with open('student_info.csv', 'w') as file:
+                writer = csv.writer(file)
+                writer.writerows(filtered_lines)
+
+            QMessageBox.information(self, "删除成功", "签到记录删除成功！")
+            break
 
     def export_records(self):
         name, ok = QInputDialog.getText(self, '导出签到记录', '请输入学生姓名:')
@@ -652,7 +721,7 @@ class AttendanceManagementDialog(QDialog):
         if not ok:
             return
 
-        return f"{year}-{month}-{day}"
+        return f"{year}/{month}/{day}"
 
 
 if __name__ == "__main__":
